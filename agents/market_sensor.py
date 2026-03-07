@@ -64,7 +64,7 @@ class MarketSensor(BaseAgent):
         trend = "bullish" if ma5 > ma20 else "bearish" if ma5 < ma20 else "sideways"
         high = max(k.high for k in klines[-20:])
         low = min(k.low for k in klines[-20:])
-        volatility_pct = (high - low) / low * 100
+        volatility_pct = (high - low) / low * 100 if low > 0 else 0
 
         if volatility_pct > 5:
             vol = "high"

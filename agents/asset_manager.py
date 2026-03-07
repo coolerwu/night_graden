@@ -21,10 +21,11 @@ logger = get_logger("asset_manager")
 class AssetManager(BaseAgent):
     """资产管家：统计持仓、计算盈亏、生成报告"""
 
-    def __init__(self, exchange: BaseExchangeClient):
+    def __init__(self, exchange: BaseExchangeClient, avg_entry_price: float = 0.0):
         super().__init__(name="asset_manager", system_prompt=ASSET_MANAGER_PROMPT)
         self.exchange = exchange
         self._peak_value = INITIAL_CAPITAL
+        self._avg_entry_price = avg_entry_price
 
     def snapshot(self, symbol: str = "BTC/USDT") -> dict:
         balance = self.exchange.fetch_balance()
@@ -49,6 +50,11 @@ class AssetManager(BaseAgent):
             else 0
         )
 
+        # 计算未实现盈亏（基于均价）
+        unrealized_pnl = 0.0
+        if base_qty > 0 and self._avg_entry_price > 0:
+            unrealized_pnl = base_qty * (price - self._avg_entry_price)
+
         positions = []
         if base_qty > 0:
             positions.append(
@@ -56,8 +62,8 @@ class AssetManager(BaseAgent):
                     "symbol": symbol,
                     "quantity": base_qty,
                     "current_price": price,
-                    "avg_entry_price": 0,
-                    "unrealized_pnl": 0,
+                    "avg_entry_price": self._avg_entry_price,
+                    "unrealized_pnl": round(unrealized_pnl, 2),
                     "updated_at": datetime.utcnow().isoformat(),
                 }
             )
@@ -66,7 +72,7 @@ class AssetManager(BaseAgent):
             "total_value": round(total_value, 2),
             "cash_balance": round(quote_qty, 2),
             "positions": positions,
-            "total_unrealized_pnl": round(position_value - (base_qty * price), 2),
+            "total_unrealized_pnl": round(unrealized_pnl, 2),
             "total_realized_pnl": round(total_value - INITIAL_CAPITAL, 2),
             "max_drawdown_pct": round(drawdown_pct, 2),
             "peak_value": round(self._peak_value, 2),
@@ -96,12 +102,29 @@ class AssetManager(BaseAgent):
             }
 
 
+def _calc_avg_entry_price(orders: list[dict]) -> float:
+    """从历史买入订单计算加权平均买入价"""
+    total_cost = 0.0
+    total_qty = 0.0
+    for o in orders:
+        if o.get("side") == "buy" and o.get("status") == "filled":
+            qty = o.get("filled_quantity", 0) or o.get("quantity", 0)
+            px = o.get("filled_price", 0) or o.get("price", 0)
+            total_cost += qty * px
+            total_qty += qty
+    return total_cost / total_qty if total_qty > 0 else 0.0
+
+
 def asset_manager_node(state: dict[str, Any]) -> dict[str, Any]:
     """LangGraph node function"""
     exchange = state["exchange"]
     symbol = state.get("market_data", {}).get("symbol", "BTC/USDT")
 
-    manager = AssetManager(exchange)
+    # 从历史订单计算均价
+    orders = state.get("orders", [])
+    avg_entry = _calc_avg_entry_price(orders)
+
+    manager = AssetManager(exchange, avg_entry_price=avg_entry)
     portfolio = manager.snapshot(symbol)
     report = manager.generate_report(portfolio)
 

@@ -22,7 +22,8 @@ from utils.logger import get_logger
 logger = get_logger("api.trading")
 router = APIRouter()
 
-# 运行状态
+# 运行状态（线程锁保护）
+_trading_lock = threading.Lock()
 _trading_state: dict = {"running": False, "result": None, "error": None}
 
 
@@ -34,12 +35,12 @@ class StartRequest(BaseModel):
 
 @router.post("/start")
 async def start_trading(req: StartRequest):
-    if _trading_state["running"]:
-        raise HTTPException(400, "Trading session already running")
-
-    _trading_state["running"] = True
-    _trading_state["result"] = None
-    _trading_state["error"] = None
+    with _trading_lock:
+        if _trading_state["running"]:
+            raise HTTPException(400, "Trading session already running")
+        _trading_state["running"] = True
+        _trading_state["result"] = None
+        _trading_state["error"] = None
 
     def run():
         try:
@@ -73,12 +74,15 @@ async def start_trading(req: StartRequest):
             result = graph.invoke(initial_state)
             # Remove non-serializable exchange client
             result.pop("exchange", None)
-            _trading_state["result"] = result
+            with _trading_lock:
+                _trading_state["result"] = result
         except Exception as e:
             logger.error("Trading error: %s", e)
-            _trading_state["error"] = str(e)
+            with _trading_lock:
+                _trading_state["error"] = str(e)
         finally:
-            _trading_state["running"] = False
+            with _trading_lock:
+                _trading_state["running"] = False
 
     thread = threading.Thread(target=run, daemon=True)
     thread.start()

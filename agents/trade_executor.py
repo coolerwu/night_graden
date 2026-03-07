@@ -41,7 +41,13 @@ class TradeExecutor:
             logger.warning("Invalid signal, skipping: %s", signal)
             return None
 
-        side = OrderSide.BUY if signal_type == SignalType.BUY.value else OrderSide.SELL
+        if signal_type == SignalType.BUY.value:
+            side = OrderSide.BUY
+        elif signal_type == SignalType.SELL.value:
+            side = OrderSide.SELL
+        else:
+            logger.warning("Unknown signal type '%s', skipping: %s", signal_type, signal)
+            return None
 
         try:
             order = self.exchange.place_order(

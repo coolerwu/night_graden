@@ -71,8 +71,11 @@ class StrategyEngine:
 
     def _calc_quantity(self, signal: TradeSignal, current_position: float) -> float:
         if signal.signal_type == SignalType.SELL:
-            return min(current_position, MAX_POSITION_SIZE)
-        return min(0.01, MAX_POSITION_SIZE)  # 默认买入量
+            # 卖出量不能超过当前持仓
+            return current_position if current_position > 0 else 0
+        # 买入量：基于可用仓位计算，不超过最大仓位
+        remaining = max(0, MAX_POSITION_SIZE - current_position)
+        return min(0.01, remaining)
 
 
 def strategy_engine_node(state: dict[str, Any]) -> dict[str, Any]:
