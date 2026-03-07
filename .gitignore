@@ -6,7 +6,6 @@ build/
 .env
 .venv/
 venv/
-node_modules/
-frontend/dist/
 *.log
+my_workspace/
 .DS_Store
