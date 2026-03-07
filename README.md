@@ -1,44 +1,31 @@
 # Night Garden / 夜花园
 
-> 多智能体量化交易系统 | Multi-Agent Quantitative Trading System
+> 多智能体量化代码开发系统 | Multi-Agent Quant Code Development System
 
-自动交易 + 实时监控 + 资产管理，五个 AI Agent 协同工作的量化交易闭环系统。
+5 个 AI Agent 组成代码开发流水线，面向量化交易垂直赛道（自动交易 + 监控 + 资产管理），自动完成需求分析、代码编写、测试、部署和线上监控的完整闭环。
 
-Auto-trading + Real-time Monitoring + Asset Management — a closed-loop quant trading system powered by 5 collaborative AI agents.
+5 AI Agents form a code development pipeline for the quantitative trading vertical (auto-trading + monitoring + asset management), automating the full cycle of requirement analysis, code generation, testing, deployment, and production monitoring.
 
 ---
 
 ## 架构 / Architecture
 
 ```
-                    ┌──────────────────┐
-                    │  market_sensor   │  市场感知器 / Market Sensor
-                    │  采集行情 + LLM分析│
-                    └────────┬─────────┘
-                             │
-                    ┌────────▼─────────┐
-                    │ strategy_engine  │  策略引擎 / Strategy Engine
-                    │  信号生成(代码逻辑) │
-                    └────────┬─────────┘
-                             │
-                    ┌────────▼─────────┐
-                    │  risk_guardian   │  风控守卫 / Risk Guardian
-                    │  预检+拦截(代码逻辑)│
-                    └────────┬─────────┘
-                             │
-                ┌────────────┤ 通过/拦截
-                │            │
-       ┌────────▼────────┐   │
-       │ trade_executor  │   │  交易执行器 / Trade Executor
-       │  下单执行        │   │
-       └────────┬────────┘   │
-                │            │
-                └────────────┤
-                             │
-                    ┌────────▼─────────┐
-                    │  asset_manager   │  资产管家 / Asset Manager
-                    │  资产统计 + LLM报告│
-                    └──────────────────┘
+用户需求 / log_monitor 告警
+        ↓
+  requirement_analyst   需求分析师 (LLM)
+        ↓
+  code_developer        代码工程师 (LLM → 写入 workspace)
+        ↓
+  test_engineer         测试工程师 (subprocess 真实执行)
+        │
+   pass ↓         fail → 回到 code_developer 重试
+        ↓
+  deploy_operator       运维部署 (复制到 production/)
+        ↓
+  log_monitor           日志监控 (LLM 分析日志)
+        │
+   正常 → END      异常 → 回到 requirement_analyst 闭环
 ```
 
 ---
@@ -47,162 +34,119 @@ Auto-trading + Real-time Monitoring + Asset Management — a closed-loop quant t
 
 | Agent | 中文名 | 驱动方式 | 职责 |
 |-------|--------|---------|------|
-| **market_sensor** | 市场感知器 | LLM + 规则 | 接入行情数据源，清洗标准化数据，LLM 辅助趋势分析 |
-| **strategy_engine** | 策略引擎 | 纯代码 | 加载可插拔策略模块，基于行情生成买卖信号 |
-| **risk_guardian** | 风控守卫 | 纯代码 | 仓位上限、回撤检查、单笔限额，拦截高风险交易 |
-| **trade_executor** | 交易执行器 | 纯代码 | 通过交易所 API 下单/撤单，管理订单生命周期 |
-| **asset_manager** | 资产管家 | LLM + 规则 | 跟踪余额、持仓、盈亏，LLM 辅助生成资产报告 |
+| `requirement_analyst` | 需求分析师 | LLM | 接收用户需求或线上告警，拆解为开发任务（JSON） |
+| `code_developer` | 代码工程师 | LLM | 生成 Python 代码 + 测试代码，真实写入 Workspace |
+| `test_engineer` | 测试工程师 | LLM + subprocess | 用 subprocess 真实执行代码和 pytest，分析测试结果 |
+| `deploy_operator` | 运维部署 | 代码逻辑 | 将通过测试的代码部署到 production/，写部署日志 |
+| `log_monitor` | 日志监控 | LLM | 分析 production/logs/，发现异常反馈给 requirement_analyst |
 
 | Agent | English Name | Mode | Responsibility |
 |-------|-------------|------|----------------|
-| **market_sensor** | Market Sensor | LLM + Rules | Collect market data, normalize candles/tickers, LLM-assisted trend analysis |
-| **strategy_engine** | Strategy Engine | Code Only | Load pluggable strategy modules, generate buy/sell signals from market data |
-| **risk_guardian** | Risk Guardian | Code Only | Position limits, drawdown checks, single-order caps, block high-risk trades |
-| **trade_executor** | Trade Executor | Code Only | Execute orders via exchange API, manage order lifecycle |
-| **asset_manager** | Asset Manager | LLM + Rules | Track balance, positions, PnL, LLM-assisted portfolio reports |
+| `requirement_analyst` | Requirement Analyst | LLM | Parse user requirements or alerts into structured dev tasks (JSON) |
+| `code_developer` | Code Developer | LLM | Generate Python code + tests, write to Workspace |
+| `test_engineer` | Test Engineer | LLM + subprocess | Execute code & pytest via subprocess, analyze results |
+| `deploy_operator` | Deploy Operator | Code logic | Copy approved code to production/, write deploy logs |
+| `log_monitor` | Log Monitor | LLM | Analyze production/logs/, feedback alerts to requirement_analyst |
+
+---
+
+## Workspace 机制 / Workspace System
+
+所有 Agent 产出物都在用户指定的 **Workspace** 目录内，通过 `workspace.yaml` 配置管理。
+
+All agent outputs go into the user-specified **Workspace** directory, managed via `workspace.yaml`.
+
+```yaml
+# workspace.yaml
+workspace_name: "my_quant_project"
+code_output_dir: "./src"          # code_developer 写代码的位置
+test_output_dir: "./tests"        # test_engineer 测试输出
+deploy_dir: "./production"        # deploy_operator 部署目标
+log_dir: "./production/logs"      # log_monitor 监控的日志
+```
+
+首次运行时自动创建默认配置和目录结构。
+
+Auto-creates default config and directory structure on first run.
 
 ---
 
 ## 项目结构 / Project Structure
 
 ```
-night_graden/
-├── agents/                     # 5 核心 Agent
-│   ├── base.py                 # Agent 基类 (LLM 封装)
-│   ├── market_sensor.py        # 市场感知器
-│   ├── strategy_engine.py      # 策略引擎
-│   ├── trade_executor.py       # 交易执行器
-│   ├── risk_guardian.py        # 风控守卫
-│   └── asset_manager.py        # 资产管家
-├── graph/                      # LangGraph 工作流
-│   ├── state.py                # TradingState 状态定义
-│   └── workflow.py             # StateGraph 构建 & 路由
-├── strategies/                 # 可插拔交易策略
-│   ├── base_strategy.py        # 策略基类
-│   ├── ma_crossover.py         # 均线交叉策略
-│   └── grid_trading.py         # 网格交易策略
-├── models/                     # Pydantic 数据模型
-│   ├── market_data.py          # K线、Ticker、OrderBook
-│   ├── signal.py               # 交易信号
-│   ├── order.py                # 订单
-│   └── position.py             # 持仓 & 资产组合
-├── config/                     # 配置
-│   ├── settings.py             # 环境变量 & 全局配置
-│   └── prompts.py              # Agent LLM 提示词
-├── utils/                      # 工具模块
-│   ├── logger.py               # 统一日志
-│   └── exchange_client.py      # 交易所客户端 (Mock + Live)
-├── api/                        # FastAPI 后端 API
-│   ├── server.py               # 服务入口 + WebSocket
-│   └── routes/
-│       ├── trading.py          # 交易接口
-│       └── portfolio.py        # 资产接口
-├── frontend/                   # React 前端 Dashboard
-│   ├── src/
-│   │   ├── components/         # UI 组件
-│   │   ├── hooks/              # 自定义 Hooks
-│   │   ├── services/           # API 调用
-│   │   └── App.tsx             # 主页面
-│   └── package.json
-├── main.py                     # CLI 入口
+night_graden/                       # Agent 系统代码
+├── agents/
+│   ├── base.py                     # BaseAgent (LLM 封装)
+│   ├── requirement_analyst.py      # 需求分析师
+│   ├── code_developer.py           # 代码工程师
+│   ├── test_engineer.py            # 测试工程师
+│   ├── deploy_operator.py          # 运维部署
+│   └── log_monitor.py              # 日志监控
+├── graph/
+│   ├── state.py                    # WorkflowState
+│   └── workflow.py                 # StateGraph 编排
+├── config/
+│   ├── settings.py                 # 环境变量配置
+│   └── prompts.py                  # 5 个 Agent 系统提示词
+├── utils/
+│   ├── logger.py                   # 统一日志
+│   └── workspace.py                # Workspace 配置管理
+├── main.py                         # CLI 入口
 ├── requirements.txt
-└── .env.example
+├── .env.example
+└── README.md
+
+{WORKSPACE_ROOT}/                   # 用户 Workspace（可自定义路径）
+├── workspace.yaml                  # 配置文件
+├── src/                            # 生成的代码
+├── tests/                          # 测试文件
+└── production/                     # 部署目标
+    └── logs/                       # 部署 & 运行日志
 ```
 
 ---
 
 ## 快速开始 / Quick Start
 
-### 1. 安装依赖 / Install Dependencies
+### 1. 安装依赖 / Install
 
 ```bash
-# 后端 / Backend
 pip install -r requirements.txt
-
-# 前端 / Frontend
-cd frontend && npm install
 ```
 
-### 2. 配置环境 / Configure
+### 2. 配置 / Configure
 
 ```bash
 cp .env.example .env
-# 编辑 .env，填入 API Key / Edit .env with your API keys
+# 编辑 .env，填入 LLM API Key 和 Workspace 路径
+# Edit .env with your LLM API key and workspace path
 ```
 
 ### 3. 运行 / Run
 
-**CLI 模式 / CLI Mode:**
 ```bash
 python main.py
 ```
 
-**Web 模式 / Web Mode:**
-```bash
-# 启动 API 服务 / Start API server
-uvicorn api.server:app --host 0.0.0.0 --port 8000
-
-# 启动前端 / Start frontend (另一个终端)
-cd frontend && npm run dev
-```
-
-访问 / Visit: `http://localhost:3000`
+输入需求示例 / Example requirements:
+- "实现一个 BTC/USDT 均线交叉策略"
+- "编写行情数据采集模块，支持 Binance WebSocket"
+- "实现回撤止损风控模块"
+- "搭建历史数据回测框架"
 
 ---
 
-## 交易所支持 / Exchange Support
+## 工作流详解 / Workflow Details
 
-通过 `.env` 中的 `EXCHANGE_MODE` 切换模式：
+1. **requirement_analyst** — 用 LLM 将需求拆解为结构化任务（task_type、description、file_name、acceptance_criteria）
+2. **code_developer** — 用 LLM 生成完整 Python 代码 + pytest 测试，写入 `{workspace}/src/` 和 `{workspace}/tests/`
+3. **test_engineer** — 用 `subprocess` 真实执行代码和测试，LLM 分析结果判断 pass/fail
+4. **deploy_operator** — 纯代码逻辑，`shutil.copy` 到 `{workspace}/production/`，写部署日志
+5. **log_monitor** — 读取最新部署日志，LLM 分析是否有异常，异常则闭环回到步骤 1
 
-| 模式 Mode | 说明 Description |
-|-----------|-----------------|
-| `mock` | 模拟交易，无需 API Key，用于开发和回测 / Simulated trading for dev & backtesting |
-| `live` | 实盘交易，需要交易所 API Key / Live trading via exchange API |
+测试失败自动重试（回到 code_developer），超过 MAX_ITERATIONS 次强制终止。
 
-支持的交易所 (通过 ccxt)：Binance, OKX, Bybit 等。
-
-Supported exchanges (via ccxt): Binance, OKX, Bybit, etc.
-
----
-
-## 策略开发 / Strategy Development
-
-继承 `BaseStrategy` 即可添加自定义策略：
-
-Extend `BaseStrategy` to add custom strategies:
-
-```python
-from strategies.base_strategy import BaseStrategy
-from models.market_data import Kline
-from models.signal import TradeSignal, SignalType
-
-class MyStrategy(BaseStrategy):
-    name = "my_strategy"
-
-    def evaluate(self, klines: list[Kline], current_position: float = 0.0) -> TradeSignal | None:
-        # 你的策略逻辑 / Your strategy logic
-        price = klines[-1].close
-        if some_condition:
-            return TradeSignal(
-                symbol=klines[-1].symbol,
-                signal_type=SignalType.BUY,
-                price=price,
-                strategy_name=self.name,
-                confidence=0.8,
-                reason="My custom signal",
-            )
-        return None
-```
-
----
-
-## 风控规则 / Risk Rules
-
-| 规则 Rule | 默认值 Default | 说明 |
-|-----------|---------------|------|
-| 最大持仓 Max Position | 1.0 BTC | 超过则拦截买入信号 |
-| 最大回撤 Max Drawdown | 10% | 触发后暂停所有买入 |
-| 单笔上限 Single Order | 30% of portfolio | 单笔不超过总资产 30% |
+Test failures auto-retry (back to code_developer), forced termination after MAX_ITERATIONS.
 
 ---
 
@@ -210,10 +154,9 @@ class MyStrategy(BaseStrategy):
 
 - **Agent Framework**: LangGraph
 - **LLM**: OpenAI GPT-4o / Anthropic Claude (可切换)
-- **Exchange**: ccxt (统一交易所接口)
-- **Backend API**: FastAPI + WebSocket
-- **Frontend**: React + TypeScript + Vite
-- **Data Models**: Pydantic v2
+- **Code Execution**: subprocess (真实执行)
+- **Testing**: pytest
+- **Workspace Config**: YAML
 
 ---
 
