@@ -2,11 +2,17 @@
 
 5 个 Agent 组成代码开发流水线：
   requirement_analyst → code_developer → test_engineer → deploy_operator → log_monitor
+
+启动方式：
+  CLI:  python main.py
+  Web:  python main.py --web
 """
 
 from __future__ import annotations
 
-from config.settings import WORKSPACE_ROOT, MAX_ITERATIONS
+import argparse
+
+from config.settings import WORKSPACE_ROOT, MAX_ITERATIONS, WEB_HOST, WEB_PORT
 from graph.workflow import build_graph
 from utils.workspace import WorkspaceManager
 from utils.logger import get_logger
@@ -14,13 +20,13 @@ from utils.logger import get_logger
 logger = get_logger("main")
 
 
-def main():
+def run_cli():
+    """CLI 模式：终端交互"""
     print("=" * 60)
     print("  Night Garden (夜花园)")
     print("  Multi-Agent Quant Code Development System")
     print("=" * 60)
 
-    # 初始化 Workspace
     workspace = WorkspaceManager(WORKSPACE_ROOT)
     print(f"\n  Workspace:      {workspace.root}")
     print(f"  Code output:    {workspace.get_code_dir()}")
@@ -30,7 +36,6 @@ def main():
     print(f"  Max iterations: {MAX_ITERATIONS}")
     print("=" * 60)
 
-    # 获取用户需求
     print("\n请输入你的量化开发需求 / Enter your quant development requirement:")
     print("(示例: 实现一个 BTC/USDT 均线交叉策略)")
     user_input = input("\n> ").strip()
@@ -39,10 +44,8 @@ def main():
         print("未输入需求，退出。")
         return
 
-    # 构建工作流
     graph = build_graph()
 
-    # 初始状态
     initial_state = {
         "messages": [],
         "workspace_root": str(workspace.root),
@@ -58,12 +61,10 @@ def main():
         "iteration": 0,
     }
 
-    # 运行工作流
     logger.info("Starting development workflow...")
     print("\n" + "-" * 60)
     final_state = graph.invoke(initial_state)
 
-    # 输出结果
     print("\n" + "=" * 60)
     print("  Development Session Complete")
     print("=" * 60)
@@ -77,7 +78,6 @@ def main():
     if alert:
         print(f"  Alert:        {alert}")
 
-    # 审计日志
     messages = final_state.get("messages", [])
     print(f"\n  Audit Log ({len(messages)} entries):")
     for msg in messages:
@@ -86,6 +86,32 @@ def main():
         print(f"    [{agent}] {msg_type}")
 
     print("\n" + "=" * 60)
+
+
+def run_web(host: str, port: int):
+    """Web 模式：启动 FastAPI 服务"""
+    import uvicorn
+    from web.app import app
+
+    print("=" * 60)
+    print("  Night Garden (夜花园) — Web UI")
+    print(f"  http://{host}:{port}")
+    print("=" * 60)
+
+    uvicorn.run(app, host=host, port=port, log_level="info")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Night Garden — Multi-Agent Quant Code Dev System")
+    parser.add_argument("--web", action="store_true", help="Start Web UI mode")
+    parser.add_argument("--host", type=str, default=WEB_HOST, help=f"Web host (default: {WEB_HOST})")
+    parser.add_argument("--port", type=int, default=WEB_PORT, help=f"Web port (default: {WEB_PORT})")
+    args = parser.parse_args()
+
+    if args.web:
+        run_web(args.host, args.port)
+    else:
+        run_cli()
 
 
 if __name__ == "__main__":

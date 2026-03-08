@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Night Garden{% endblock %}</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+    {% block head %}{% endblock %}
+</head>
+<body class="bg-gray-950 text-gray-100 min-h-screen">
+
+    <!-- Header -->
+    <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex items-center justify-between">
+            <a href="/" class="flex items-center gap-2 text-lg font-bold text-white hover:text-purple-400 transition">
+                <span class="text-2xl">🌙</span>
+                <span>Night Garden</span>
+                <span class="text-xs text-gray-500 font-normal ml-1">夜花园</span>
+            </a>
+            <nav class="flex items-center gap-6 text-sm">
+                <a href="/" class="nav-link {% block nav_home %}{% endblock %}">Pipeline</a>
+                <a href="/workspace" class="nav-link {% block nav_workspace %}{% endblock %}">Workspace</a>
+                <a href="/history" class="nav-link {% block nav_history %}{% endblock %}">History</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Main -->
+    <main class="max-w-7xl mx-auto px-4 py-6">
+        {% block content %}{% endblock %}
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-800 mt-12 py-4 text-center text-xs text-gray-600">
+        Night Garden &mdash; Multi-Agent Quant Code Development System
+    </footer>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html>
