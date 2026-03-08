@@ -1,165 +1,318 @@
-# Night Garden / 夜花园
+<div align="center">
 
-> 多智能体量化代码开发系统 | Multi-Agent Quant Code Development System
+# 🌙 Night Garden / 夜花园
 
-5 个 AI Agent 组成代码开发流水线，面向量化交易垂直赛道（自动交易 + 监控 + 资产管理），自动完成需求分析、代码编写、测试、部署和线上监控的完整闭环。
+**The Multi-Agent Framework for Quantitative Trading Development**
 
-5 AI Agents form a code development pipeline for the quantitative trading vertical (auto-trading + monitoring + asset management), automating the full cycle of requirement analysis, code generation, testing, deployment, and production monitoring.
+*Tell AI what you need. 5 Agents write, test, deploy & monitor your quant code automatically.*
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://python.org)
+[![LangGraph](https://img.shields.io/badge/Built%20with-LangGraph-orange.svg)](https://github.com/langchain-ai/langgraph)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+
+[English](#-30-second-demo) | [中文文档](#-中文文档)
+
+</div>
 
 ---
 
-## 架构 / Architecture
+## 🎬 30-Second Demo
 
 ```
-用户需求 / log_monitor 告警
-        ↓
-  requirement_analyst   需求分析师 (LLM)
-        ↓
-  code_developer        代码工程师 (LLM → 写入 workspace)
-        ↓
-  test_engineer         测试工程师 (subprocess 真实执行)
-        │
-   pass ↓         fail → 回到 code_developer 重试
-        ↓
-  deploy_operator       运维部署 (复制到 production/)
-        ↓
-  log_monitor           日志监控 (LLM 分析日志)
-        │
-   正常 → END      异常 → 回到 requirement_analyst 闭环
+$ python main.py
+
+============================================================
+  Night Garden (夜花园)
+  Multi-Agent Quant Code Development System
+============================================================
+
+请输入你的量化开发需求 / Enter your quant development requirement:
+> 实现一个 BTC/USDT 双均线交叉策略，包含止损逻辑
+
+------------------------------------------------------------
+  [requirement_analyst] ✅ Task decomposed → ma_crossover_strategy.py
+  [code_developer]      ✅ Code generated  → workspace/src/ma_crossover_strategy.py (156 lines)
+  [code_developer]      ✅ Tests generated → workspace/tests/test_ma_crossover_strategy.py
+  [test_engineer]       ✅ Tests PASSED (3/3)
+  [deploy_operator]     ✅ Deployed → workspace/production/ma_crossover_strategy.py
+  [log_monitor]         ✅ Healthy — no anomalies detected
+------------------------------------------------------------
+
+  ✨ Done! Your strategy code is ready at:
+     workspace/production/ma_crossover_strategy.py
+```
+
+> **One sentence in, production-ready code out.** No manual coding needed.
+
+---
+
+## ✨ Features
+
+- 🤖 **5 Specialized AI Agents** — each with a clear role in the dev pipeline, not generic chatbots
+- 🔄 **Self-Healing Loop** — test failures auto-retry; production errors feed back for fixes
+- ⚡ **Real Execution** — code is actually written to disk, tests actually run via `subprocess`
+- 📂 **Configurable Workspace** — all outputs in your workspace, managed by `workspace.yaml`
+- 🏦 **Quant-Native** — prompts and workflows optimized for trading strategies, risk management, data pipelines & backtesting
+- 🔌 **Dual LLM Support** — switch between OpenAI and Anthropic with one env var
+- 📊 **Full Audit Trail** — every agent action logged with structured messages
+
+---
+
+## 🏗️ Architecture
+
+```mermaid
+graph TD
+    U["👤 User Requirement"] --> A
+
+    A["🔍 requirement_analyst<br/><i>LLM — Task Decomposition</i>"]
+    B["💻 code_developer<br/><i>LLM — Code Generation</i>"]
+    C["🧪 test_engineer<br/><i>subprocess — Real Execution</i>"]
+    D["🚀 deploy_operator<br/><i>Logic — File Deployment</i>"]
+    E["📡 log_monitor<br/><i>LLM — Log Analysis</i>"]
+
+    A --> B
+    B --> C
+    C -->|"✅ pass"| D
+    C -->|"❌ fail"| B
+    D --> E
+    E -->|"🔔 alert"| A
+    E -->|"✅ healthy"| F["🏁 Done"]
+
+    style A fill:#4A90D9,stroke:#333,color:#fff
+    style B fill:#7B68EE,stroke:#333,color:#fff
+    style C fill:#E67E22,stroke:#333,color:#fff
+    style D fill:#27AE60,stroke:#333,color:#fff
+    style E fill:#E74C3C,stroke:#333,color:#fff
+    style F fill:#2ECC71,stroke:#333,color:#fff
 ```
 
 ---
 
-## 五大 Agent / 5 Core Agents
+## 🤖 The 5 Agents
 
-| Agent | 中文名 | 驱动方式 | 职责 |
-|-------|--------|---------|------|
-| `requirement_analyst` | 需求分析师 | LLM | 接收用户需求或线上告警，拆解为开发任务（JSON） |
-| `code_developer` | 代码工程师 | LLM | 生成 Python 代码 + 测试代码，真实写入 Workspace |
-| `test_engineer` | 测试工程师 | LLM + subprocess | 用 subprocess 真实执行代码和 pytest，分析测试结果 |
-| `deploy_operator` | 运维部署 | 代码逻辑 | 将通过测试的代码部署到 production/，写部署日志 |
-| `log_monitor` | 日志监控 | LLM | 分析 production/logs/，发现异常反馈给 requirement_analyst |
-
-| Agent | English Name | Mode | Responsibility |
-|-------|-------------|------|----------------|
-| `requirement_analyst` | Requirement Analyst | LLM | Parse user requirements or alerts into structured dev tasks (JSON) |
-| `code_developer` | Code Developer | LLM | Generate Python code + tests, write to Workspace |
-| `test_engineer` | Test Engineer | LLM + subprocess | Execute code & pytest via subprocess, analyze results |
-| `deploy_operator` | Deploy Operator | Code logic | Copy approved code to production/, write deploy logs |
-| `log_monitor` | Log Monitor | LLM | Analyze production/logs/, feedback alerts to requirement_analyst |
+| # | Agent | Role | Mode | What It Does |
+|---|-------|------|------|-------------|
+| 1 | `requirement_analyst` | Analyst | LLM | Parses natural language requirements into structured task JSON |
+| 2 | `code_developer` | Engineer | LLM | Generates Python code + pytest tests, writes to `workspace/src/` |
+| 3 | `test_engineer` | QA | LLM + subprocess | Runs code & tests via `subprocess`, analyzes pass/fail |
+| 4 | `deploy_operator` | DevOps | Logic | Copies approved code to `production/`, writes deploy logs |
+| 5 | `log_monitor` | SRE | LLM | Monitors `production/logs/`, alerts loop back to step 1 |
 
 ---
 
-## Workspace 机制 / Workspace System
+## 🚀 Quick Start
 
-所有 Agent 产出物都在用户指定的 **Workspace** 目录内，通过 `workspace.yaml` 配置管理。
+### 1. Install
 
-All agent outputs go into the user-specified **Workspace** directory, managed via `workspace.yaml`.
+```bash
+git clone https://github.com/coolerwu/night_graden.git
+cd night_graden
+pip install -r requirements.txt
+```
+
+### 2. Configure
+
+```bash
+cp .env.example .env
+```
+
+Edit `.env` with your API key:
+
+```env
+LLM_PROVIDER=openai          # or anthropic
+LLM_MODEL=gpt-4o
+OPENAI_API_KEY=sk-your-key
+WORKSPACE_ROOT=./my_workspace
+```
+
+### 3. Run
+
+```bash
+python main.py
+```
+
+Then type your requirement:
+
+```
+> Build a grid trading strategy for ETH/USDT with dynamic grid spacing
+```
+
+That's it. The agents handle the rest.
+
+---
+
+## 📂 Workspace System
+
+All agent outputs live in **your workspace**, not inside the project. Configure via `workspace.yaml`:
 
 ```yaml
-# workspace.yaml
+# {WORKSPACE_ROOT}/workspace.yaml
 workspace_name: "my_quant_project"
-code_output_dir: "./src"          # code_developer 写代码的位置
-test_output_dir: "./tests"        # test_engineer 测试输出
-deploy_dir: "./production"        # deploy_operator 部署目标
-log_dir: "./production/logs"      # log_monitor 监控的日志
+code_output_dir: "./src"           # Where code_developer writes code
+test_output_dir: "./tests"         # Where test_engineer puts results
+deploy_dir: "./production"         # Where deploy_operator copies approved code
+log_dir: "./production/logs"       # Where log_monitor reads logs
 ```
 
-首次运行时自动创建默认配置和目录结构。
+First run auto-creates the config and all directories.
 
-Auto-creates default config and directory structure on first run.
+```
+my_workspace/
+├── workspace.yaml          # Auto-generated config
+├── src/                    # 💻 Generated code lands here
+├── tests/                  # 🧪 Test files here
+└── production/             # 🚀 Deployed code
+    └── logs/               # 📡 Deploy & runtime logs
+```
 
 ---
 
-## 项目结构 / Project Structure
+## 💡 Example Use Cases
+
+| Requirement | What Gets Generated |
+|-------------|-------------------|
+| "实现 BTC/USDT 均线交叉策略" | Moving average crossover strategy with signal logic |
+| "编写 Binance WebSocket 行情采集模块" | Real-time market data collector with reconnection |
+| "实现最大回撤止损风控模块" | Drawdown-based risk manager with position sizing |
+| "搭建历史数据回测框架" | Backtesting engine with performance metrics |
+| "Build a momentum factor scoring system" | Multi-factor momentum scorer with ranking |
+
+---
+
+## 🆚 Why Night Garden?
+
+| Feature | Night Garden | Manual Coding | ChatDev | MetaGPT |
+|---------|:-----------:|:-------------:|:-------:|:-------:|
+| Quant-specific agents | ✅ | - | ❌ | ❌ |
+| Real code execution & testing | ✅ | ✅ | ❌ | ❌ |
+| Self-healing feedback loop | ✅ | ❌ | ❌ | ❌ |
+| Configurable workspace | ✅ | ✅ | ❌ | ❌ |
+| One-line to production | ✅ | ❌ | ❌ | ❌ |
+| Trading domain prompts | ✅ | - | ❌ | ❌ |
+
+---
+
+## 🛠️ Tech Stack
+
+| Component | Technology |
+|-----------|-----------|
+| Agent Orchestration | [LangGraph](https://github.com/langchain-ai/langgraph) |
+| LLM Providers | OpenAI GPT-4o / Anthropic Claude |
+| Code Execution | Python `subprocess` |
+| Testing | pytest |
+| Workspace Config | YAML |
+| State Management | TypedDict + LangGraph State |
+
+---
+
+## 🗺️ Roadmap
+
+- [x] 5-agent development pipeline (analyze → code → test → deploy → monitor)
+- [x] Self-healing loop (test failure retry + alert feedback)
+- [x] Configurable workspace with `workspace.yaml`
+- [x] Dual LLM support (OpenAI / Anthropic)
+- [ ] Web UI for workspace management & agent monitoring
+- [ ] ReAct mode for requirement_analyst (multi-step reasoning)
+- [ ] Multi-file project generation (strategy + config + launcher)
+- [ ] Backtesting integration (auto-run backtest after code generation)
+- [ ] Strategy performance benchmarking
+- [ ] Plugin system for custom agents
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Here's how to get started:
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+**Ideas for contribution:**
+- New agent types (e.g., `backtester`, `optimizer`)
+- More quant strategy templates
+- Web UI / dashboard
+- Additional LLM provider support
+- Documentation & tutorials
+
+---
+
+## 📄 License
+
+[MIT](LICENSE) — use it freely for personal and commercial projects.
+
+---
+
+<details>
+<summary><h2>🇨🇳 中文文档</h2></summary>
+
+### 项目简介
+
+夜花园是一个面向量化交易的多智能体代码开发系统。你只需用一句话描述需求，5 个 AI Agent 会自动完成：
+
+1. **需求分析师** (`requirement_analyst`) — 将你的需求拆解为结构化开发任务
+2. **代码工程师** (`code_developer`) — 生成 Python 代码和测试，真实写入磁盘
+3. **测试工程师** (`test_engineer`) — 用 subprocess 真实执行代码和 pytest
+4. **运维部署** (`deploy_operator`) — 将通过测试的代码部署到 production 目录
+5. **日志监控** (`log_monitor`) — 分析线上日志，发现异常自动反馈修复
+
+### 核心特性
+
+- 🔄 **自愈闭环** — 测试失败自动重试，线上异常自动反馈修复
+- ⚡ **真实执行** — 代码真正写入磁盘，测试真正用 subprocess 运行
+- 📂 **可配置 Workspace** — 所有产出物在用户指定的目录内，通过 `workspace.yaml` 管理
+- 🏦 **量化原生** — 提示词和工作流专为交易策略、风控、数据采集、回测优化
+
+### 快速开始
+
+```bash
+git clone https://github.com/coolerwu/night_graden.git
+cd night_graden
+pip install -r requirements.txt
+cp .env.example .env   # 编辑填入 API Key
+python main.py
+```
+
+输入示例：
+- "实现一个 BTC/USDT 均线交叉策略"
+- "编写 Binance WebSocket 行情采集模块"
+- "实现回撤止损风控模块"
+- "搭建历史数据回测框架"
+
+### 项目结构
 
 ```
 night_graden/                       # Agent 系统代码
-├── agents/
+├── agents/                         # 5 个核心 Agent
 │   ├── base.py                     # BaseAgent (LLM 封装)
 │   ├── requirement_analyst.py      # 需求分析师
 │   ├── code_developer.py           # 代码工程师
 │   ├── test_engineer.py            # 测试工程师
 │   ├── deploy_operator.py          # 运维部署
 │   └── log_monitor.py              # 日志监控
-├── graph/
-│   ├── state.py                    # WorkflowState
-│   └── workflow.py                 # StateGraph 编排
-├── config/
-│   ├── settings.py                 # 环境变量配置
-│   └── prompts.py                  # 5 个 Agent 系统提示词
-├── utils/
+├── graph/                          # LangGraph 工作流编排
+│   ├── state.py                    # WorkflowState 状态定义
+│   └── workflow.py                 # StateGraph 构建 & 条件路由
+├── config/                         # 配置
+│   ├── settings.py                 # 环境变量
+│   └── prompts.py                  # Agent 系统提示词
+├── utils/                          # 工具
 │   ├── logger.py                   # 统一日志
 │   └── workspace.py                # Workspace 配置管理
-├── main.py                         # CLI 入口
-├── requirements.txt
-├── .env.example
-└── README.md
-
-{WORKSPACE_ROOT}/                   # 用户 Workspace（可自定义路径）
-├── workspace.yaml                  # 配置文件
-├── src/                            # 生成的代码
-├── tests/                          # 测试文件
-└── production/                     # 部署目标
-    └── logs/                       # 部署 & 运行日志
+└── main.py                         # CLI 入口
 ```
+
+</details>
 
 ---
 
-## 快速开始 / Quick Start
+<div align="center">
 
-### 1. 安装依赖 / Install
+**If Night Garden helps you, consider giving it a ⭐**
 
-```bash
-pip install -r requirements.txt
-```
+Built with 🌙 by [coolerwu](https://github.com/coolerwu)
 
-### 2. 配置 / Configure
-
-```bash
-cp .env.example .env
-# 编辑 .env，填入 LLM API Key 和 Workspace 路径
-# Edit .env with your LLM API key and workspace path
-```
-
-### 3. 运行 / Run
-
-```bash
-python main.py
-```
-
-输入需求示例 / Example requirements:
-- "实现一个 BTC/USDT 均线交叉策略"
-- "编写行情数据采集模块，支持 Binance WebSocket"
-- "实现回撤止损风控模块"
-- "搭建历史数据回测框架"
-
----
-
-## 工作流详解 / Workflow Details
-
-1. **requirement_analyst** — 用 LLM 将需求拆解为结构化任务（task_type、description、file_name、acceptance_criteria）
-2. **code_developer** — 用 LLM 生成完整 Python 代码 + pytest 测试，写入 `{workspace}/src/` 和 `{workspace}/tests/`
-3. **test_engineer** — 用 `subprocess` 真实执行代码和测试，LLM 分析结果判断 pass/fail
-4. **deploy_operator** — 纯代码逻辑，`shutil.copy` 到 `{workspace}/production/`，写部署日志
-5. **log_monitor** — 读取最新部署日志，LLM 分析是否有异常，异常则闭环回到步骤 1
-
-测试失败自动重试（回到 code_developer），超过 MAX_ITERATIONS 次强制终止。
-
-Test failures auto-retry (back to code_developer), forced termination after MAX_ITERATIONS.
-
----
-
-## 技术栈 / Tech Stack
-
-- **Agent Framework**: LangGraph
-- **LLM**: OpenAI GPT-4o / Anthropic Claude (可切换)
-- **Code Execution**: subprocess (真实执行)
-- **Testing**: pytest
-- **Workspace Config**: YAML
-
----
-
-## License
-
-MIT
+</div>
