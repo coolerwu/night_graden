@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Night Garden — Workspace{% endblock %}
+{% block nav_workspace %}active{% endblock %}
+
+{% block content %}
+<div x-data="workspacePage()" class="space-y-6">
+
+    <!-- Workspace Info -->
+    <section class="card">
+        <h2 class="text-lg font-semibold mb-3">📂 Workspace Configuration</h2>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+                <label class="text-xs text-gray-500 uppercase tracking-wide">Root Path</label>
+                <p class="text-sm font-mono text-purple-300 mt-1">{{ workspace.root }}</p>
+            </div>
+            <div>
+                <label class="text-xs text-gray-500 uppercase tracking-wide">Name</label>
+                <p class="text-sm mt-1">{{ config.get('workspace_name', 'N/A') }}</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Config Editor -->
+    <section class="card">
+        <h2 class="text-lg font-semibold mb-3">⚙️ workspace.yaml</h2>
+        <form @submit.prevent="saveConfig()" class="space-y-4">
+            {% for key, value in config.items() %}
+            <div class="flex items-center gap-4">
+                <label class="w-40 text-sm text-gray-400 text-right">{{ key }}</label>
+                <input
+                    type="text"
+                    name="{{ key }}"
+                    value="{{ value }}"
+                    x-model="configForm['{{ key }}']"
+                    class="flex-1 bg-gray-800 border border-gray-700 rounded px-3 py-1.5 text-sm font-mono
+                           focus:outline-none focus:ring-1 focus:ring-purple-500"
+                >
+            </div>
+            {% endfor %}
+            <div class="flex justify-end">
+                <button type="submit" class="px-4 py-2 bg-purple-600 hover:bg-purple-500 rounded text-sm transition">
+                    Save Changes
+                </button>
+            </div>
+            <p x-show="saved" x-transition class="text-green-400 text-sm text-right">✅ Saved</p>
+        </form>
+    </section>
+
+    <!-- File Browser -->
+    <section class="card">
+        <h2 class="text-lg font-semibold mb-3">🗂️ Workspace Files</h2>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {% for dir_name, file_list in files.items() %}
+            <div>
+                <h3 class="text-sm font-semibold text-gray-400 mb-2 flex items-center gap-1">
+                    {% if dir_name == 'src' %}💻{% elif dir_name == 'tests' %}🧪{% else %}🚀{% endif %}
+                    {{ dir_name }}/
+                </h3>
+                {% if file_list %}
+                <ul class="space-y-1">
+                    {% for f in file_list %}
+                    <li>
+                        <button
+                            @click="viewFile('{{ dir_name }}/{{ f }}')"
+                            class="text-sm text-blue-400 hover:text-blue-300 hover:underline transition font-mono"
+                        >{{ f }}</button>
+                    </li>
+                    {% endfor %}
+                </ul>
+                {% else %}
+                <p class="text-xs text-gray-600 italic">Empty</p>
+                {% endif %}
+            </div>
+            {% endfor %}
+        </div>
+    </section>
+
+    <!-- File Viewer -->
+    <section class="card" x-show="fileContent !== null" x-transition>
+        <div class="flex items-center justify-between mb-3">
+            <h2 class="text-lg font-semibold">📄 <span x-text="filePath" class="font-mono text-purple-300"></span></h2>
+            <button @click="fileContent = null" class="text-gray-500 hover:text-white text-sm">✕ Close</button>
+        </div>
+        <pre class="bg-gray-950 rounded-lg p-4 max-h-96 overflow-y-auto font-mono text-xs text-green-300 whitespace-pre-wrap" x-text="fileContent"></pre>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function workspacePage() {
+    return {
+        configForm: {{ config | tojson }},
+        saved: false,
+        fileContent: null,
+        filePath: '',
+
+        async saveConfig() {
+            await fetch('/api/workspace', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(this.configForm),
+            });
+            this.saved = true;
+            setTimeout(() => this.saved = false, 2000);
+        },
+
+        async viewFile(path) {
+            const configMap = {
+                'src': '{{ config.get("code_output_dir", "./src") }}',
+                'tests': '{{ config.get("test_output_dir", "./tests") }}',
+                'production': '{{ config.get("deploy_dir", "./production") }}',
+            };
+            const dir = path.split('/')[0];
+            const fileName = path.split('/').slice(1).join('/');
+            const realDir = configMap[dir] || `./${dir}`;
+            const realPath = `${realDir}/${fileName}`;
+
+            try {
+                const res = await fetch(`/api/files/${realPath}`);
+                const data = await res.json();
+                this.fileContent = data.content || data.error || 'Could not load file';
+                this.filePath = path;
+            } catch (e) {
+                this.fileContent = 'Error loading file';
+                this.filePath = path;
+            }
+        },
+    };
+}
+</script>
+{% endblock %}

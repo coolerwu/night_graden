@@ -128,8 +128,15 @@ WORKSPACE_ROOT=./my_workspace
 
 ### 3. Run
 
+**CLI mode:**
 ```bash
 python main.py
+```
+
+**Web UI mode:**
+```bash
+python main.py --web
+# Open http://localhost:8000 in your browser
 ```
 
 Then type your requirement:
@@ -203,6 +210,8 @@ my_workspace/
 | Testing | pytest |
 | Workspace Config | YAML |
 | State Management | TypedDict + LangGraph State |
+| Web UI | FastAPI + Jinja2 + HTMX + Alpine.js |
+| Real-time Streaming | SSE (Server-Sent Events) |
 
 ---
 
@@ -212,7 +221,7 @@ my_workspace/
 - [x] Self-healing loop (test failure retry + alert feedback)
 - [x] Configurable workspace with `workspace.yaml`
 - [x] Dual LLM support (OpenAI / Anthropic)
-- [ ] Web UI for workspace management & agent monitoring
+- [x] Web UI for workspace management & agent monitoring
 - [ ] ReAct mode for requirement_analyst (multi-step reasoning)
 - [ ] Multi-file project generation (strategy + config + launcher)
 - [ ] Backtesting integration (auto-run backtest after code generation)

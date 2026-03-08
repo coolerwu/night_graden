@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+{% block title %}Night Garden — Pipeline{% endblock %}
+{% block nav_home %}active{% endblock %}
+
+{% block content %}
+<div x-data="pipeline()" class="space-y-6">
+
+    <!-- Requirement Input -->
+    <section class="card">
+        <h2 class="text-lg font-semibold mb-3">📝 Development Requirement</h2>
+        <form @submit.prevent="submitTask()" class="flex gap-3">
+            <input
+                x-model="requirement"
+                type="text"
+                placeholder="e.g. 实现一个 BTC/USDT 均线交叉策略"
+                class="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-2.5 text-sm
+                       focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent
+                       placeholder-gray-500"
+                :disabled="running"
+            >
+            <button
+                type="submit"
+                class="px-6 py-2.5 bg-purple-600 hover:bg-purple-500 rounded-lg text-sm font-medium
+                       transition disabled:opacity-40 disabled:cursor-not-allowed"
+                :disabled="running || !requirement.trim()"
+            >
+                <span x-show="!running">🚀 Start</span>
+                <span x-show="running" class="flex items-center gap-2">
+                    <svg class="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
+                    </svg>
+                    Running...
+                </span>
+            </button>
+        </form>
+    </section>
+
+    <!-- Pipeline Progress -->
+    <section class="card" x-show="taskId">
+        <h2 class="text-lg font-semibold mb-4">⚡ Pipeline Progress</h2>
+        <div class="flex items-center justify-between gap-2">
+            <template x-for="agent in agents" :key="agent.id">
+                <div class="flex-1 text-center">
+                    <div
+                        class="w-10 h-10 mx-auto rounded-full flex items-center justify-center text-lg transition-all duration-500"
+                        :class="{
+                            'bg-green-600 ring-2 ring-green-400 scale-110': agent.status === 'done',
+                            'bg-purple-600 ring-2 ring-purple-400 animate-pulse scale-110': agent.status === 'running',
+                            'bg-gray-700': agent.status === 'pending',
+                            'bg-red-600 ring-2 ring-red-400': agent.status === 'error',
+                        }"
+                        x-text="agent.icon"
+                    ></div>
+                    <p class="text-xs mt-2 text-gray-400" x-text="agent.label"></p>
+                </div>
+            </template>
+        </div>
+        <!-- connector lines -->
+        <div class="flex items-center justify-between mt-1 px-8">
+            <template x-for="i in 4" :key="i">
+                <div class="flex-1 h-0.5 mx-1"
+                     :class="agents[i]?.status !== 'pending' ? 'bg-purple-600' : 'bg-gray-700'"></div>
+            </template>
+        </div>
+    </section>
+
+    <!-- Live Log -->
+    <section class="card" x-show="logs.length > 0">
+        <h2 class="text-lg font-semibold mb-3">📋 Live Log</h2>
+        <div class="bg-gray-950 rounded-lg p-4 max-h-64 overflow-y-auto font-mono text-xs space-y-1" id="log-container">
+            <template x-for="(log, i) in logs" :key="i">
+                <div class="flex gap-2">
+                    <span class="text-gray-500" x-text="log.time"></span>
+                    <span class="font-semibold" :class="agentColor(log.agent)" x-text="'[' + log.agent + ']'"></span>
+                    <span class="text-gray-300" x-text="log.message"></span>
+                </div>
+            </template>
+        </div>
+    </section>
+
+    <!-- Results Tabs -->
+    <section class="card" x-show="done" x-data="{ tab: 'code' }">
+        <h2 class="text-lg font-semibold mb-3">📦 Results</h2>
+        <div class="flex gap-1 mb-4 border-b border-gray-700">
+            <button @click="tab='code'" class="tab-btn" :class="tab==='code' && 'tab-active'">💻 Code</button>
+            <button @click="tab='test'" class="tab-btn" :class="tab==='test' && 'tab-active'">🧪 Test</button>
+            <button @click="tab='deploy'" class="tab-btn" :class="tab==='deploy' && 'tab-active'">🚀 Deploy</button>
+        </div>
+        <div class="bg-gray-950 rounded-lg p-4 max-h-96 overflow-y-auto">
+            <pre x-show="tab==='code'" class="font-mono text-xs text-green-300 whitespace-pre-wrap" x-text="results.code || 'No code generated'"></pre>
+            <pre x-show="tab==='test'" class="font-mono text-xs text-yellow-300 whitespace-pre-wrap" x-text="results.test || 'No test output'"></pre>
+            <div x-show="tab==='deploy'" class="text-sm">
+                <p>Status: <span class="font-bold" :class="results.deployStatus === 'success' ? 'text-green-400' : 'text-red-400'" x-text="results.deployStatus || 'N/A'"></span></p>
+                <p class="text-gray-400 mt-1" x-show="results.codePath">File: <span x-text="results.codePath"></span></p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Error -->
+    <section class="card border-red-800 bg-red-950/30" x-show="error">
+        <h2 class="text-lg font-semibold text-red-400 mb-2">❌ Error</h2>
+        <p class="text-sm text-red-300" x-text="error"></p>
+    </section>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function pipeline() {
+    return {
+        requirement: '',
+        taskId: null,
+        running: false,
+        done: false,
+        error: null,
+        logs: [],
+        results: { code: '', test: '', deployStatus: '', codePath: '' },
+        agents: [
+            { id: 'requirement_analyst', label: 'Analyst', icon: '🔍', status: 'pending' },
+            { id: 'code_developer',      label: 'Developer', icon: '💻', status: 'pending' },
+            { id: 'test_engineer',       label: 'Tester', icon: '🧪', status: 'pending' },
+            { id: 'deploy_operator',     label: 'Deployer', icon: '🚀', status: 'pending' },
+            { id: 'log_monitor',         label: 'Monitor', icon: '📡', status: 'pending' },
+        ],
+
+        async submitTask() {
+            this.running = true;
+            this.done = false;
+            this.error = null;
+            this.logs = [];
+            this.results = { code: '', test: '', deployStatus: '', codePath: '' };
+            this.agents.forEach(a => a.status = 'pending');
+
+            try {
+                const res = await fetch('/api/run', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ requirement: this.requirement }),
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+                this.taskId = data.task_id;
+                this.connectSSE(data.task_id);
+            } catch (e) {
+                this.error = e.message;
+                this.running = false;
+            }
+        },
+
+        connectSSE(taskId) {
+            const source = new EventSource(`/api/stream/${taskId}`);
+
+            source.addEventListener('agent_update', (e) => {
+                const event = JSON.parse(e.data);
+                const agentName = event.agent;
+
+                // Update pipeline status
+                const agent = this.agents.find(a => a.id === agentName);
+                if (agent) {
+                    // Mark previous agents as done
+                    const idx = this.agents.indexOf(agent);
+                    this.agents.forEach((a, i) => {
+                        if (i < idx && a.status !== 'done') a.status = 'done';
+                    });
+                    agent.status = 'running';
+                }
+
+                // Add log
+                const now = new Date().toLocaleTimeString();
+                const phase = event.phase || '';
+                this.logs.push({
+                    time: now,
+                    agent: agentName,
+                    message: this.formatAgentMessage(agentName, event.data),
+                });
+
+                // Scroll log
+                this.$nextTick(() => {
+                    const c = document.getElementById('log-container');
+                    if (c) c.scrollTop = c.scrollHeight;
+                });
+
+                // Extract results
+                this.extractResults(agentName, event.data);
+
+                // Mark current agent as done after processing
+                if (agent) agent.status = 'done';
+            });
+
+            source.addEventListener('error_event', (e) => {
+                const event = JSON.parse(e.data);
+                this.error = event.message || 'Unknown error';
+            });
+
+            source.addEventListener('done', () => {
+                source.close();
+                this.running = false;
+                this.done = true;
+                this.agents.forEach(a => {
+                    if (a.status === 'running') a.status = 'done';
+                });
+            });
+
+            source.onerror = () => {
+                source.close();
+                this.running = false;
+            };
+        },
+
+        formatAgentMessage(agent, data) {
+            if (!data) return 'Processing...';
+            const msgs = data.messages;
+            if (msgs && msgs.length > 0) {
+                const last = msgs[msgs.length - 1];
+                return `${last.type || 'update'}`;
+            }
+            if (data.test_result) return `Test: ${data.test_result}`;
+            if (data.deploy_status) return `Deploy: ${data.deploy_status}`;
+            if (data.current_phase) return `Phase → ${data.current_phase}`;
+            return 'Done';
+        },
+
+        extractResults(agent, data) {
+            if (!data) return;
+            if (agent === 'code_developer') {
+                this.results.code = data.code_artifact || this.results.code;
+                this.results.codePath = data.code_file_path || this.results.codePath;
+            }
+            if (agent === 'test_engineer') {
+                this.results.test = data.test_output || this.results.test;
+            }
+            if (agent === 'deploy_operator') {
+                this.results.deployStatus = data.deploy_status || this.results.deployStatus;
+            }
+        },
+
+        agentColor(name) {
+            const colors = {
+                requirement_analyst: 'text-blue-400',
+                code_developer: 'text-purple-400',
+                test_engineer: 'text-yellow-400',
+                deploy_operator: 'text-green-400',
+                log_monitor: 'text-red-400',
+            };
+            return colors[name] || 'text-gray-400';
+        },
+    };
+}
+</script>
+{% endblock %}
